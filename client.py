@@ -13,6 +13,8 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
+# USER MODIFY THE FOLLOWING LINE WITH IP_ADDRESS OF SERVER
+IP_ADDRESS = '127.0.0.1'
 
 VERSION_NUMBER = '1'
 commands = {'LOGIN': '1',
@@ -32,7 +34,7 @@ commands = {'LOGIN': '1',
             'START_CHAT': 'f'}
 
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client.connect(('10.250.185.78', 7976))
+client.connect((IP_ADDRESS, 7976))
 
 # pretty much same as Wednesday, removed the redundant connection at the beginning which asks for login/create account.
 def login_message():
@@ -53,25 +55,29 @@ def parse_arg(input):
     if not input:
         return VERSION_NUMBER + commands['NOTHING'] + ''
 
+    input_strip = "".join(input.split())
+
     command = 'TEXT'
-    if input[0] == '/':
-        if input[1:3] == 'C' or input[1:3] == 'C ':
+    if input_strip[0] == '/':
+        if input_strip[1] == 'C':
             command = 'CONNECT'
-        if input[1:3] == 'H':
+        if input_strip[1] == 'H':
             command = 'HELP'
-        if input[1:3] == 'S':
+        if input_strip[1] == 'S':
             command = 'SHOW'
-        if input[1:3] == 'D':
+        if input_strip[1] == 'D':
             command = 'DELETE'
 
     if command == 'TEXT':
-        return VERSION_NUMBER + commands[command] + input
+        return VERSION_NUMBER + commands[command] + input_strip
+    elif command == 'SHOW':
+        return VERSION_NUMBER + commands[command] + input_strip
     # if the command is not CONNECT, just send whole payload
     elif command != 'CONNECT':
         return VERSION_NUMBER + commands[command] + ''
     # if the command is CONNECT, send only the part of the payload which specifies which user we are connecting to
     else:
-        return VERSION_NUMBER + commands[command] + input[3:]
+        return VERSION_NUMBER + commands[command] + input_strip[2:]
 
 # send_text command only used when user is engaged in a chatroom. In this case, '/E' triggers chatroom exit.
 def send_text(input):
@@ -98,10 +104,10 @@ def receive():
                 return
 
             elif message[1] == commands['DISPLAY']:
-                    if message[2:]: print(message[2:])
-                    inp = input(":")
-                    m = parse_arg(inp)
-                    client.send(m.encode('ascii'))
+                if message[2:]: print(message[2:])
+                inp = input(":")
+                m = parse_arg(inp)
+                client.send(m.encode('ascii'))
 
 
             elif message[1] == commands['SHOW_TEXT']:
@@ -124,8 +130,9 @@ def receive():
             else:
                 if message[2:]:
                     print(message[2:])
-        except:
+        except Exception as e:
             print("An error occured!")
+            print(e)
             client.close()
             break
 
@@ -142,4 +149,3 @@ def write():
 
 receive_thread = threading.Thread(target=receive)               #receiving multiple messages
 receive_thread.start()
-

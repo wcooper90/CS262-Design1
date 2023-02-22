@@ -226,7 +226,7 @@ class Greeter(messaging_pb2_grpc.GreeterServicer):
         elif message[1] == commands['EXIT_CHAT']:
             return messaging_pb2.HelloReply(message = exit_grpc(client, message))
         else:
-            return messaging_pb2.HelloReply(message = VERSION_NUMBER + commands['DISPLAY']  + prompt_grpc(message))
+            return messaging_pb2.HelloReply(message = prompt_grpc(message))
 
 
     # probably won't need this

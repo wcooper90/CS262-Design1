@@ -31,10 +31,8 @@ commands = {'LOGIN': '1',
             'SHOW_TEXT': 'e',
             'START_CHAT': 'f'}
 
-
-client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-# client.connect(('10.250.185.78', 7976))
-client.connect(('127.0.0.1', 7976))
+# client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# client.connect(('127.0.1.1', 7976))
 
 # pretty much same as Wednesday, removed the redundant connection at the beginning which asks for login/create account.
 def login_message():
@@ -100,10 +98,10 @@ def receive():
                 return
 
             elif message[1] == commands['DISPLAY']:
-                    if message[2:]: print(message[2:])
-                    inp = input(":")
-                    m = parse_arg(inp)
-                    client.send(m.encode('ascii'))
+                if message[2:]: print(message[2:])
+                inp = input(":")
+                m = parse_arg(inp)
+                client.send(m.encode('ascii'))
 
 
             elif message[1] == commands['SHOW_TEXT']:
@@ -126,8 +124,9 @@ def receive():
             else:
                 if message[2:]:
                     print(message[2:])
-        except:
+        except Exception as e:
             print("An error occured!")
+            print(e)
             client.close()
             break
 
@@ -142,8 +141,5 @@ def write():
         client.send(m.encode('ascii'))
 
 
-receive_thread = threading.Thread(target=receive)               #receiving multiple messages
-receive_thread.start()
-
-# write_thread = threading.Thread(target=write)                   #sending messages
-# write_thread.start()
+# receive_thread = threading.Thread(target=receive)               #receiving multiple messages
+# receive_thread.start()

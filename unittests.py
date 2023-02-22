@@ -31,10 +31,10 @@ class Test(unittest.TestCase):
         self.mock_server.listen()
 
         self.mock_client1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.mock_client1.connect(('10.250.185.78', 7976))
+        self.mock_client1.connect(('127.0.0.1', 7976))
 
         self.mock_client2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.mock_client2.connect(('10.250.185.78', 7976))
+        self.mock_client2.connect(('127.0.0.1', 7976))
 
 
     def tearDown(self):
@@ -67,11 +67,12 @@ class Test(unittest.TestCase):
         server.clients = {self.mock_client2:'name2'}
         server.connections = {'name2':'name1'}
         server.exit(self.mock_client2, '')
-        self.assertRaises(KeyError, lambda: server.connections['name2'])
+        self.assertEqual('', server.connections['name2'])
 
     def test_server_show(self):
         server.USERNAMES = ['n1','n2']
-        lst = server.show(self.mock_client1, '') 
+        server.clients = {self.mock_client1:'name1'}
+        lst = server.show(self.mock_client1, '')
         for user in server.USERNAMES:
             self.assertIn(user, str(lst))
 
@@ -118,6 +119,7 @@ class Test(unittest.TestCase):
         self.assertIn(commands['TEXT'], error)
 
 
-		
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -1,6 +1,6 @@
 import socket, threading
 
-host = '127.0.0.1'
+host = '0.0.0.0'
 port = 7976
 
 # to change colors of terminal text
@@ -33,32 +33,50 @@ commands = {'LOGIN': '1',
             'SHOW_TEXT': 'e',
             'START_CHAT': 'f'}
 
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)              #socket initialization
-server.bind((host, port))                                               #binding host and port to socket
-server.listen()
+hostname=socket.gethostname()
+IPAddr=socket.gethostbyname(hostname)
+print("Your Computer Name is:"+hostname)
+print("Your Computer IP Address is:"+IPAddr)
+
+# server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)              #socket initialization
+# server.bind((host, port))                                               #binding host and port to socket
+# server.listen()
 
 queue = {}
 USERNAMES = []
 connections = {}
 clients = {}
+LOGGED_IN = set([])
 
 # deletes a username from list of usernames, removes the association from the client, and sends the appropriate message
 # TODO: eventually will also have to delete undelivered messages to a deleted account
 def delete_account(client, message):
     out = 'Account deleted'
+    LOGGED_IN.remove(clients[client])
     USERNAMES.remove(clients[client])
+    queue.pop(clients[client])
     clients[client] = ''
-    client.send((VERSION_NUMBER + commands['DELETE'] + out).encode('ascii'))
+    return (VERSION_NUMBER + commands['DELETE'] + out).encode('ascii')
+
+    # client.send((VERSION_NUMBER + commands['DELETE'] + out).encode('ascii'))
 
 
 # displays the other users on the current server.
 def show(client, message):
     out = ""
     for user in USERNAMES:
-        out += user + '\n'
+
+        # Display number of unread messages from other users
+        number_unread = 0
+        if clients[client] in queue:
+            if user in queue[clients[client]]:
+                number_unread = len(queue[clients[client]][user])
+
+        if number_unread > 0: out += user + ' ('+str(number_unread)+' unread messages)' + '\n'
+        else: out += user + '\n'
 
     # I'm just using the "DISPLAY" command to display specific messages and prompt the user for another response at this point.
-    client.send((VERSION_NUMBER + commands['DISPLAY'] + out).encode('ascii'))
+    return (VERSION_NUMBER + commands['DISPLAY'] + out).encode('ascii')
 
 # displays the list of possible commands.
 def help(client, message):
@@ -76,7 +94,12 @@ def login_username(username, client):
     if username[1] == commands['LOGIN_NAME']:
         if username[2:] not in USERNAMES:
             error_message = 'Username not found'
-        clients[client] = username[2:]
+        elif username[2:] in LOGGED_IN:
+            error_message = 'User currently logged in!'
+        else:
+            clients[client] = username[2:]
+            connections[username[2:]] = ''
+            LOGGED_IN.add(username[2:])
 
     if username[1] == commands['CREATE_NAME']:
         if username[2:] in USERNAMES:
@@ -84,6 +107,9 @@ def login_username(username, client):
         else:
             USERNAMES.append(username[2:])
             clients[client] = username[2:]
+            connections[username[2:]] = ''
+            queue[username[2:]] = {}
+            LOGGED_IN.add(username[2:])
     return error_message
 
 
@@ -95,12 +121,15 @@ def text(client, message):
 
     receiver = connections[clients[client]] # username
 
+    if not receiver:
+        client.send((VERSION_NUMBER + commands['DISPLAY'] + 'You currently are not connected to anyone. Type /H for help.  ').encode('ascii'))
+        return
+
     receiver_address = ''
     for key, val in clients.items():
         if val == receiver:
             receiver_address = key
             break
-
 
     if (receiver in connections) and (connections[receiver] == clients[sender]): # comparing usernames
             receiver_address.send((VERSION_NUMBER + commands['SHOW_TEXT'] + bcolors.OKBLUE + clients[client] + ': ' + bcolors.ENDC+ message[2:]).encode('ascii'))
@@ -135,40 +164,30 @@ def connect(client, message):
 
             client.send((VERSION_NUMBER + commands['START_CHAT'] + 'You are now connected to ' + message[2:] + '! You may now begin chatting. To exit, type "/E"').encode('ascii'))
 
+            out = ''
             if clients[client] in queue:
                 if message[2:] in queue[clients[client]]:
                     for m in queue[clients[client]][message[2:]]:
-                        client.send((VERSION_NUMBER + commands['SHOW_TEXT'] + bcolors.OKBLUE + message[2:] + ': ' + bcolors.ENDC + m + '\n').encode('ascii'))
+                        out += bcolors.OKBLUE + message[2:] + ': ' + bcolors.ENDC + m + '\n'
 
                     queue[clients[client]][message[2:]] = []
+
+            client.send((VERSION_NUMBER + commands['SHOW_TEXT'] + out).encode('ascii'))
+
+
+def check_unread_messages(client):
+    user = clients[client]
+    out = ""
+    for key, val in queue[user].items():
+        out += 'You have unread messages from: ' + str(key) + '\n'
+    return out
 
 
 # conditional logic for disconnecting from another user. Updates connections accordingly. Prompts user for new connection.
 def exit(client, message):
-    connections.pop(clients[client])
-    client.send((VERSION_NUMBER + commands['DISPLAY'] + 'Commands: /C [username] (connect with a user), /S (show list of other users), /H (help), /D (delete account and exit)').encode('ascii'))
-
-
-def broadcast(client, message):
-    """
-    TODO:
-    Needs to check to see if users are mutually connected. Then broadcast. If users are not mutually connected, add message to queue?
-    """
-    sender = client
-    reciever = connections[clients[client]]
-
-    if connections[reciever] == sender:
-        reciever.send()
-
-    pass
-
-
-def check_messages(client):
-    """
-    TODO:
-    Check queue to see if logged in account has any remaining messages, and show in welcome display?
-    """
-    pass
+    # connections.pop(clients[client])
+    connections[clients[client]] = ''
+    return (VERSION_NUMBER + commands['DISPLAY'] + 'Commands: /C [username] (connect with a user), /S (show list of other users), /H (help), /D (delete account and exit)').encode('ascii')
 
 
 def handle(client):
@@ -188,25 +207,21 @@ def handle(client):
             elif message[1] == commands['TEXT']:
                 text(client, message)
             elif message[1] == commands['SHOW']:
-                show(client, message)
+                client.send(show(client, message))
             elif message[1] == commands['HELP']:
                 help(client, message)
             elif message[1] == commands['DELETE']:
-                delete_account(client, message)
+                client.send(delete_account(client, message))
             elif message[1] == commands['EXIT_CHAT']:
-                exit(client, message)
+                client.send(exit(client, message))
             else:
                 prompt(client, message)
 
 
-            # My idea is to then call this broadcast function at the end of each iteration of this while loop,
-            # it will check to see which users are connected/signed in and send messages from the queue appropriately
-            # broadcast(client, message)
-
-
         except:
-            # it will probably be very important to also update this section when making changes to functions involving connections
-            connections.pop(client)
+            LOGGED_IN.remove(clients[client])
+            if client in connections:
+                connections.pop(client)
             clients.pop(client)
             client.close()
             break
@@ -228,17 +243,9 @@ def receive():
 
         print("Username is {}".format(username[2:]))
         client.send((VERSION_NUMBER + commands['DISPLAY'] + \
-        'Logged in! Commands: /C [username] (connect with a user), /S (show list of other users), /H (help), /D (delete account and exit)').encode('ascii'))
-
-        # Idea is to call a function here that will check for queued messages for this particular user upon login.
-        # Maybe output will be one line printed per other user this user has messages from
-        # check_messages(client)
-
+            'Logged in! Commands: /C [username] (connect with a user), /S (show list of other users), /H (help), /D (delete account and exit)\n' + check_unread_messages(client)).encode('ascii'))
 
         thread = threading.Thread(target=handle, args=(client,))
         thread.start()
 
-receive()
-
-# SERVER
-# keep a list of existing accounts, and a queuing service
+# receive()

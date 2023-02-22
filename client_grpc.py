@@ -42,9 +42,8 @@ commands = {'LOGIN': '1',
             'REQUEST': 'g'}
 
 
-client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-# client.connect(('10.250.185.78', 7976))
-client.connect(('127.0.0.1', 7976))
+IP_ADDRESS = '10.250.185.78'
+IP_ADDRESS = '127.0.0.1'
 
 # pretty much same as Wednesday, removed the redundant connection at the beginning which asks for login/create account.
 def login_message():
@@ -96,7 +95,7 @@ def send_text(input):
 def read(client_id):
     metadata = [('client-id', client_id)]
     while True:
-        with grpc.insecure_channel('localhost:50051') as channel:
+        with grpc.insecure_channel(IP_ADDRESS + ':50051') as channel:
             stub = messaging_pb2_grpc.GreeterStub(channel)
             response = stub.SayHello(messaging_pb2.HelloRequest(details=str(VERSION_NUMBER + commands['REQUEST'] + '')), metadata=metadata)
             # exit if account deleted
@@ -117,7 +116,7 @@ def run():
     # try logging in
     while not logged_in:
         username = login_message()
-        with grpc.insecure_channel('localhost:50051') as channel:
+        with grpc.insecure_channel(IP_ADDRESS + ':50051') as channel:
             stub = messaging_pb2_grpc.GreeterStub(channel)
             response = stub.SayHello(messaging_pb2.HelloRequest(details=str(username)), metadata=metadata)
             if response.message[1] == commands["DISPLAY"]:
@@ -132,8 +131,10 @@ def run():
     read_thread.start()
 
     while True:
-        with grpc.insecure_channel('localhost:50051') as channel:
+        with grpc.insecure_channel(IP_ADDRESS + ':50051') as channel:
             stub = messaging_pb2_grpc.GreeterStub(channel)
+
+            # check size of this
             response = stub.SayHello(messaging_pb2.HelloRequest(details=str(m)), metadata=metadata)
             if response.message[1] == commands["DISPLAY"]:
                 print(response.message[2:])
