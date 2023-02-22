@@ -1,4 +1,5 @@
 import socket, threading
+import sys
 username = ""
 
 # change color of terminal text
@@ -92,6 +93,7 @@ def receive():
 
         try:
             message = client.recv(1024).decode('ascii')
+            # print("size of transfer buffer: " + str(sys.getsizeof(message)))
             if message[1] == commands['ENTER']:
                 if message[2:]:
                     print(message[2:])

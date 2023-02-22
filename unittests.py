@@ -2,6 +2,7 @@ import unittest
 import socket
 import server
 import client
+from client_object import Client
 
 VERSION_NUMBER = '1'
 commands = {'LOGIN': '1',
@@ -19,6 +20,20 @@ commands = {'LOGIN': '1',
             'EXIT_CHAT': 'd',
             'SHOW_TEXT': 'e',
             'START_CHAT': 'f'}
+
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+IP_ADDRESS = '127.0.0.1'
+port = 7976
 
 class Test(unittest.TestCase):
 

@@ -1,4 +1,5 @@
 import socket, threading
+import sys
 
 host = '0.0.0.0'
 port = 7976
@@ -55,6 +56,12 @@ def delete_account(client, message):
     LOGGED_IN.remove(clients[client])
     USERNAMES.remove(clients[client])
     queue.pop(clients[client])
+
+    # delete unread messages from this user for everyone else
+    for key in queue:
+        if clients[client] in queue[key]:
+            del queue[key][clients[client]]
+
     clients[client] = ''
     return (VERSION_NUMBER + commands['DELETE'] + out).encode('ascii')
 
@@ -176,7 +183,6 @@ def text(client, message):
 # conditional logic for connecting to another user. Updates connections accordingly.
 def connect(client, message):
     if message[2:] not in USERNAMES:
-        print(message[2:])
         client.send((VERSION_NUMBER + commands['DISPLAY'] + 'user not found. Please try again').encode('ascii'))
     else:
         # do not allow user to connect to oneself.
@@ -225,6 +231,7 @@ def handle(client):
 
         try:
             message = client.recv(1024).decode()
+            # print("size of transfer buffer: " + str(sys.getsizeof(message)))
             if message[1] == commands['CONNECT']:
                 connect(client, message)
             elif message[1] == commands['TEXT']:

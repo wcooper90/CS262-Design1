@@ -5,6 +5,7 @@ import random
 import grpc
 import messaging_pb2
 import messaging_pb2_grpc
+import sys
 
 
 
@@ -134,8 +135,8 @@ def run():
         with grpc.insecure_channel(IP_ADDRESS + ':50051') as channel:
             stub = messaging_pb2_grpc.GreeterStub(channel)
 
-            # check size of this
             response = stub.SayHello(messaging_pb2.HelloRequest(details=str(m)), metadata=metadata)
+            # print("size of transfer buffer: " + str(sys.getsizeof(response)))
             if response.message[1] == commands["DISPLAY"]:
                 print(response.message[2:])
             elif response.message[1] == commands['SHOW_TEXT']:

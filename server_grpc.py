@@ -1,7 +1,7 @@
 import socket, threading
 import logging
 from concurrent import futures
-
+import sys
 
 import grpc
 import messaging_pb2
@@ -163,7 +163,17 @@ class Greeter(messaging_pb2_grpc.GreeterServicer):
 
     def SayHello(self, request, context):
         # client id is sent through metadata
+
+        if sys.getsizeof(context) != 48:
+            logging.debug(sys.getsizeof(context))
+        if sys.getsizeof(request) != 64:
+            logging.debug(sys.getsizeof(request))
+
+
         metadict = dict(context.invocation_metadata())
+
+        logging.debug(sys.getsizeof(metadict))
+        logging.debug(sys.getsizeof(request.details))
         client = metadict['client-id']
         message = request.details
         error_message = ''
@@ -227,12 +237,6 @@ class Greeter(messaging_pb2_grpc.GreeterServicer):
             return messaging_pb2.HelloReply(message = exit_grpc(client, message))
         else:
             return messaging_pb2.HelloReply(message = prompt_grpc(message))
-
-
-    # probably won't need this
-    def SayHelloAgain(self, request, context):
-        return messaging_pb2.HelloReply(message=f'Hello again, {request.details}!')
-
 
 
 def serve():
