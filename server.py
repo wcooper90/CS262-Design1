@@ -43,6 +43,8 @@ server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)              #socket 
 server.bind((host, port))                                               #binding host and port to socket
 server.listen()
 
+
+# globals
 queue = {}
 USERNAMES = []
 connections = {}
@@ -50,7 +52,6 @@ clients = {}
 LOGGED_IN = set([])
 
 # deletes a username from list of usernames, removes the association from the client, and sends the appropriate message
-# TODO: eventually will also have to delete undelivered messages to a deleted account
 def delete_account(client, message):
     out = 'Account deleted'
     LOGGED_IN.remove(clients[client])
@@ -65,14 +66,13 @@ def delete_account(client, message):
     clients[client] = ''
     return (VERSION_NUMBER + commands['DELETE'] + out).encode('ascii')
 
-    # client.send((VERSION_NUMBER + commands['DELETE'] + out).encode('ascii'))
-
 
 # displays the other users on the current server.
 def show(client, message):
 
     all_users = []
 
+    # text wildcard search logic
     if message[4:]:
         if '*' in message[4:]:
             key = message[4:message.index('*')]
@@ -84,13 +84,12 @@ def show(client, message):
             all_users.append(message[4:])
         else:
             return (VERSION_NUMBER + commands['DISPLAY'] + "No users match").encode('ascii')
+    # if no wild card, return full list of users
     else:
         all_users = USERNAMES
 
-
     out = ""
     for user in all_users:
-
         # Display number of unread messages from other users
         number_unread = 0
         if clients[client] in queue:
@@ -100,13 +99,14 @@ def show(client, message):
         if number_unread > 0: out += user + ' ('+str(number_unread)+' unread messages)' + '\n'
         else: out += user + '\n'
 
-    # I'm just using the "DISPLAY" command to display specific messages and prompt the user for another response at this point.
     return (VERSION_NUMBER + commands['DISPLAY'] + out).encode('ascii')
+
 
 # displays the list of possible commands.
 def help(client, message):
     out = 'Commands: /C [username] (connect with a user), /S (show list of other users), /H (help), /D (delete account and exit)'
     client.send((VERSION_NUMBER + commands['DISPLAY'] + out).encode('ascii'))
+
 
 # prompts the user for another input (only used when the user just presses 'enter' without typing anything)
 def prompt(client, message):
@@ -142,30 +142,31 @@ def login_username(username, client):
     return error_message
 
 
-# called whenever user submits a "non-command". Needs to be updated when actually connecting users,
-# Also storing a client object as a dictionary key might be a bit weird, haven't totally figured it out yet.
+# called whenever user submits a "non-command". If connected to another user, send them the chat
 def text(client, message):
 
-    sender = client # client code
-
+    sender = client
     receiver = connections[clients[client]] # username
 
+    # prompt if not connected to anyone
     if not receiver:
         client.send((VERSION_NUMBER + commands['DISPLAY'] + 'You currently are not connected to anyone. Type /H for help.  ').encode('ascii'))
         return
 
+    # find the correct address to send messages to
     receiver_address = ''
     for key, val in clients.items():
         if val == receiver:
             receiver_address = key
             break
 
+    # if users are mutually connected, send message directly
     if (receiver in connections) and (connections[receiver] == clients[sender]): # comparing usernames
             receiver_address.send((VERSION_NUMBER + commands['SHOW_TEXT'] + bcolors.OKBLUE + clients[client] + ': ' + bcolors.ENDC+ message[2:]).encode('ascii'))
 
     else:
         # Tell client that reciever is not in chat anymore, but sent messages will be saved for htem
-        # store the messages
+        # store the messages in the queue
         if receiver in queue:
             if clients[sender] in queue[receiver]:
                 queue[receiver][clients[sender]].append(message[2:])
@@ -175,10 +176,6 @@ def text(client, message):
 
         client.send((VERSION_NUMBER + commands['SHOW_TEXT'] + 'The recipient has disconnected. Your chats will be saved. ').encode('ascii'))
 
-
-
-    # if client in connections and connections[client]:
-    #     client.send((VERSION_NUMBER + commands['TEXT'] + '').encode('ascii'))
 
 # conditional logic for connecting to another user. Updates connections accordingly.
 def connect(client, message):
@@ -190,20 +187,21 @@ def connect(client, message):
             client.send((VERSION_NUMBER + commands['DISPLAY'] + 'You cannot connect to yourself! Please try again ').encode('ascii'))
         else:
             connections[clients[client]] = message[2:]
-
             client.send((VERSION_NUMBER + commands['START_CHAT'] + 'You are now connected to ' + message[2:] + '! You may now begin chatting. To exit, type "/E"').encode('ascii'))
-
             out = ''
+
+            # if the user has unread messages from the new user they've connected to, display these messages
             if clients[client] in queue:
                 if message[2:] in queue[clients[client]]:
                     for m in queue[clients[client]][message[2:]]:
                         out += bcolors.OKBLUE + message[2:] + ': ' + bcolors.ENDC + m + '\n'
-
+                    # empty the queue after messages have been displayed
                     queue[clients[client]][message[2:]] = []
 
             client.send((VERSION_NUMBER + commands['SHOW_TEXT'] + out).encode('ascii'))
 
 
+# display notifications for unread messages from other users upon logging in
 def check_unread_messages(client):
     user = clients[client]
     out = ""
@@ -214,14 +212,12 @@ def check_unread_messages(client):
 
 # conditional logic for disconnecting from another user. Updates connections accordingly. Prompts user for new connection.
 def exit(client, message):
-    # connections.pop(clients[client])
     connections[clients[client]] = ''
     return (VERSION_NUMBER + commands['DISPLAY'] + 'Commands: /C [username] (connect with a user), /S (show list of other users), /H (help), /D (delete account and exit)').encode('ascii')
 
 
 def handle(client):
     while True:
-
         # for debugging purposes
         print('*'*80)
         print('clients:', clients)
@@ -230,8 +226,11 @@ def handle(client):
         print('queue:', queue)
 
         try:
+            # wait for messages
             message = client.recv(1024).decode()
             # print("size of transfer buffer: " + str(sys.getsizeof(message)))
+
+            # command conditionals
             if message[1] == commands['CONNECT']:
                 connect(client, message)
             elif message[1] == commands['TEXT']:
@@ -247,7 +246,6 @@ def handle(client):
             else:
                 prompt(client, message)
 
-
         except:
             LOGGED_IN.remove(clients[client])
             if client in connections:
@@ -257,6 +255,7 @@ def handle(client):
             break
 
 
+# after starting the server, allows server to accept clients  
 def receive():
     while True:
         client, address = server.accept()
@@ -264,10 +263,12 @@ def receive():
         error_message = ''
         username = ''
         print("Connected with {}".format(str(address)))
+        # handle logging in before starting a new thread for this user
         while True:
             client.send((VERSION_NUMBER + commands['ENTER'] + error_message).encode('ascii'))
             username = client.recv(1024).decode('ascii')
             error_message = login_username(username, client)
+            # if no error, break out of loop
             if error_message == '':
                 break
 
@@ -275,7 +276,10 @@ def receive():
         client.send((VERSION_NUMBER + commands['DISPLAY'] + \
             'Logged in! Commands: /C [username] (connect with a user), /S (show list of other users), /H (help), /D (delete account and exit)\n' + check_unread_messages(client)).encode('ascii'))
 
+        # begin handle thread
         thread = threading.Thread(target=handle, args=(client,))
         thread.start()
 
+
+# start server
 receive()

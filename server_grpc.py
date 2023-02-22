@@ -51,7 +51,6 @@ connections = {}
 clients = {}
 
 # deletes a username from list of usernames, removes the association from the client, and sends the appropriate message
-# TODO: eventually will also have to delete undelivered messages to a deleted account
 def delete_account_grpc(client, message):
     out = 'Account deleted'
     USERNAMES.remove(clients[client])
@@ -64,24 +63,24 @@ def show_grpc(client, message):
     out = ""
     for user in USERNAMES:
         out += user + '\n'
-
     # I'm just using the "DISPLAY" command to display specific messages and prompt the user for another response at this point.
     return VERSION_NUMBER + commands['DISPLAY'] + out
+
 
 # displays the list of possible commands.
 def help_grpc(client, message):
     out = 'Commands: /C [username] (connect with a user), /S (show list of other users), /H (help), /D (delete account and exit)'
     return VERSION_NUMBER + commands['DISPLAY'] + out
 
+
 # prompts the user for another input (only used when the user just presses 'enter' without typing anything)
 def prompt_grpc(message):
     return VERSION_NUMBER + commands['DISPLAY'] + ''
 
 
-# called whenever user submits a "non-command". Needs to be updated when actually connecting users,
-# Also storing a client object as a dictionary key might be a bit weird, haven't totally figured it out yet.
+# called whenever user submits a "non-command", usually a text message to another user
 def text_grpc(client, message):
-    sender = client # client code
+    sender = client
     receiver = connections[clients[client]] # username
 
     # if not connected to someone, return blank
@@ -96,8 +95,6 @@ def text_grpc(client, message):
             queue[receiver][clients[sender]] = [message[2:]]
     else:
         queue[receiver] = {clients[sender]:[message[2:]]}
-
-
 
     # after adding to queue, if we realize they are not mutually connected, send this message back to the sender
     if not ((receiver in connections) and (connections[receiver] == clients[sender])):
@@ -124,6 +121,7 @@ def connect_grpc(client, message):
                 if message[2:] in queue[clients[client]]:
                     for m in queue[clients[client]][message[2:]]:
                         out += bcolors.OKBLUE + message[2:] + ': ' + bcolors.ENDC + m + '\n'
+                    # empty queue after contents are displayed
                     queue[clients[client]][message[2:]] = []
 
             return VERSION_NUMBER + commands['START_CHAT'] + 'You are now connected to ' + message[2:] + '! You may now begin chatting. To exit, type "/E" \n' + out
@@ -152,7 +150,7 @@ def request_grpc(client, message):
             if connection in queue[clients[client]]:
                 for m in queue[clients[client]][connection]:
                     out += bcolors.OKBLUE + connection + ': ' + bcolors.ENDC + m + '\n'
-
+                # empty the queue after contents displayed
                 queue[clients[client]][connection] = []
 
     return VERSION_NUMBER + commands['DISPLAY'] + out
@@ -163,17 +161,8 @@ class Greeter(messaging_pb2_grpc.GreeterServicer):
 
     def SayHello(self, request, context):
         # client id is sent through metadata
-
-        if sys.getsizeof(context) != 48:
-            logging.debug(sys.getsizeof(context))
-        if sys.getsizeof(request) != 64:
-            logging.debug(sys.getsizeof(request))
-
-
         metadict = dict(context.invocation_metadata())
 
-        logging.debug(sys.getsizeof(metadict))
-        logging.debug(sys.getsizeof(request.details))
         client = metadict['client-id']
         message = request.details
         error_message = ''
@@ -184,8 +173,7 @@ class Greeter(messaging_pb2_grpc.GreeterServicer):
         # logging.debug(queue)
         # logging.debug("*"*80)
 
-        # conditionals for different types of commands
-
+        # login logic
         if message[1] == commands['LOGIN_NAME']:
             if message[2:] not in USERNAMES:
                 error_message = 'Username not found'
@@ -202,13 +190,13 @@ class Greeter(messaging_pb2_grpc.GreeterServicer):
             return messaging_pb2.HelloReply(message = VERSION_NUMBER + commands['DISPLAY'] + \
                 'Logged in! Commands: /C [username] (connect with a user), /S (show list of other users), /H (help), /D (delete account and exit)')
 
+        # create account logic
         elif message[1] == commands['CREATE_NAME']:
             if message[2:] in USERNAMES:
                 error_message = 'Username taken'
                 return messaging_pb2.HelloReply(message = VERSION_NUMBER + commands["ENTER"] + error_message)
             else:
                 USERNAMES.append(message[2:])
-
                 # if client leaves without warning, their old client id will still be in connections. Delete this if the username is signed into again
                 for key, val in clients.items():
                     if val == message[2:]:
@@ -221,6 +209,7 @@ class Greeter(messaging_pb2_grpc.GreeterServicer):
                 return messaging_pb2.HelloReply(message = VERSION_NUMBER + commands['DISPLAY'] + \
                     'Logged in! Commands: /C [username] (connect with a user), /S (show list of other users), /H (help), /D (delete account and exit)')
 
+        # other commands logic
         elif message[1] == commands['REQUEST']:
             return messaging_pb2.HelloReply(message = request_grpc(client, message))
         elif message[1] == commands['CONNECT']:

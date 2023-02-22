@@ -82,6 +82,7 @@ def parse_arg(input):
 
 # send_text command only used when user is engaged in a chatroom. In this case, '/E' triggers chatroom exit.
 def send_text(input):
+    # check to see if client is exiting chat 
     if input == '/E':
         return VERSION_NUMBER + commands['EXIT_CHAT'] + 'end'
     return VERSION_NUMBER + commands['TEXT'] + input
@@ -94,17 +95,21 @@ def receive():
         try:
             message = client.recv(1024).decode('ascii')
             # print("size of transfer buffer: " + str(sys.getsizeof(message)))
+            # only for login and create names functions
             if message[1] == commands['ENTER']:
                 if message[2:]:
                     print(message[2:])
                 m = login_message()
                 client.send(m.encode('ascii'))
 
+            # deleting the account. Break out of while loop
             elif message[1] == commands['DELETE']:
                 if message[2:]:
                     print(message[2:])
+                client.close()
                 return
 
+            # poll for input
             elif message[1] == commands['DISPLAY']:
                 if message[2:]: print(message[2:])
                 inp = input(":")
@@ -112,19 +117,16 @@ def receive():
                 client.send(m.encode('ascii'))
 
 
+            # receiving text from another connection
             elif message[1] == commands['SHOW_TEXT']:
                 if message[2:]: print(message[2:])
 
 
-            # we know we are connected to another user/in a chat room when we receive the "TEXT" command
+            # we know we are connected to another user/in a chat room when we receive the "START_CHAT" command
             elif message[1] == commands['START_CHAT']:
-                    if message[2:]: print(message[2:])
-                    # change terminal colors when in chatroom
-                    # inp = input(bcolors.OKGREEN + username + ': ' + bcolors.ENDC)
-                    # m = send_text(inp)
-                    # client.send(m.encode('ascii'))
-                    write_thread = threading.Thread(target=write)                   #sending messages
-                    write_thread.start()
+                if message[2:]: print(message[2:])
+                write_thread = threading.Thread(target=write)                   # thread for sending messages
+                write_thread.start()
 
 
             # I assume when receiving chats from other users, message should be directly printed here. Not sure if it will be this easy in practice.
@@ -139,6 +141,7 @@ def receive():
             break
 
 
+# write thread function. When a user is connected, they can send messages
 def write():
     while True:
         inp = input()
@@ -149,5 +152,6 @@ def write():
         client.send(m.encode('ascii'))
 
 
-receive_thread = threading.Thread(target=receive)               #receiving multiple messages
+# start the client
+receive_thread = threading.Thread(target=receive)
 receive_thread.start()
